@@ -213,7 +213,7 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
     r = Report()
     agent_home = is_agent_home(root)
     if agent_home:
-        r.add("INFO", "conditional", "agent-home", "CLAUDE.md and no package manifest; a missing LICENSE is a warning, not a failure")
+        r.add("INFO", "conditional", "agent-home", "CLAUDE.md and no package manifest; install, usage, support, and license are clauses, and a missing LICENSE is a warning")
     text = readme.read_text(errors="replace")
     lines = text.splitlines()
     sections = parse(text)
@@ -300,6 +300,8 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
     inst = find_section(sections, H["install"])
     if no_code:
         r.add("INFO", "required", "install", "waived: documentation repository")
+    elif agent_home and not inst:
+        r.add("INFO", "required", "install", "agent home: the clone and the plugin installs are a clause, not a section")
     elif not inst:
         r.add("FAIL", "required", "install", "no install, setup, or getting-started heading")
     elif not inst.fences:
@@ -313,6 +315,8 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
     use = next((s for s in headed if re.search(H["usage"], plain(s.title), re.I) and s is not inst), None)
     if no_code:
         r.add("INFO", "required", "usage", "waived: documentation repository")
+    elif agent_home and not (use and use.fences):
+        r.add("INFO", "required", "usage", "agent home: `claude` in the directory is the usage; a clause is enough")
     elif not use:
         r.add("FAIL", "required", "usage", "no usage, run, or example heading apart from install")
     elif not use.fences:
@@ -334,7 +338,9 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
     lic = find_section(sections, H["license"])
     lic_files = [p for p in root.iterdir() if p.name.upper().startswith(("LICENSE", "LICENCE", "COPYING"))]
     ident = next((t for t in LICENSE_TOKENS if re.search(rf"\b{re.escape(t)}\b", text)), None)
-    if not lic:
+    if not lic and agent_home:
+        r.add("WARN" if not re.search(r"licen[cs]e", prose_all, re.I) else "PASS", "required", "license", "agent home: one sentence on the license, or its absence, is enough" if re.search(r"licen[cs]e", prose_all, re.I) else "nothing says whether there is a license")
+    elif not lic:
         r.add("FAIL", "required", "license", "no license section")
     else:
         if not ident:
@@ -368,7 +374,7 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
     if re.search(r"/issues|/discussions|mailto:|discord|slack|gitter|matrix\.to|mailing list", text, re.I) or find_section(sections, H["support"]):
         r.add("PASS", "required", "support", "says where to ask")
     elif has_remote(root):
-        r.add("FAIL", "required", "support", "nothing says where to file a bug or ask a question")
+        r.add("WARN" if agent_home else "FAIL", "required", "support", "nothing says where to file a bug or ask a question")
     else:
         r.add("WARN", "required", "support", "nothing says where to ask; no remote, so maybe there is nowhere yet")
 
