@@ -1,6 +1,6 @@
 ---
 name: readme
-description: Write, grade, or keep a README.md for the person deciding whether to use the software. Use when asked to write or rewrite a README, when asked whether a README is any good, and when a change lands and someone asks whether the README needs to move.
+description: "Use whenever the README.md itself is what gets written, judged, or trimmed. Covers: writing one for a repo, plugin, skill, or agent home, including terse asks like \"readme for X\"; checking before a tag, release, or open-sourcing that it tells a stranger how to install, run, and what is still experimental; grading or candid review of one; triage of a README that has grown, buries the install command, or carries material that belongs elsewhere, where the ask is what to cut and where it should go; after a code change, deciding which README sections must move. Skip when the file being produced or edited is something other than the README (a changelog, contributing guide, release notes, a page under docs, the repo description field) or when the ask is a single cosmetic insert such as a badge row."
 ---
 
 # README
