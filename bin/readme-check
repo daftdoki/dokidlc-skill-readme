@@ -9,8 +9,8 @@ what was found. Exit 1 when a gate or a required check fails.
 
 Classes: gate (the two answers most READMEs lack: why and status),
 required, conditional (checked only when the repository meets the
-condition), leave-out (material that belongs in another document), and
-style. The judgment checks, the ones a script cannot make, are in the
+condition), leave-out (material that belongs in another document), voice
+(the mechanical subset of the unslop skill), and style. The judgment checks, the ones a script cannot make, are in the
 skill's references/sections.md and are the model's job.
 """
 
@@ -31,11 +31,28 @@ ONE_LINER_MAX = 120
 INTRO_WORD_CEILING = 300
 BADGE_CEILING = 5
 
-ADJECTIVES = (
+# The mechanical subset of the unslop skill's patterns. The judgment half
+# (puffery, rhythm, mannered prose) stays with the skill itself.
+VOCABULARY = (
+    # promotional adjectives (unslop rule 4)
     "blazing", "powerful", "simple", "easy", "seamless", "robust", "lightweight",
     "elegant", "cutting-edge", "state-of-the-art", "intuitive", "effortless",
     "modern", "beautiful", "amazing", "awesome", "revolutionary", "next-generation",
+    "groundbreaking", "vibrant", "stunning", "renowned",
+    # AI vocabulary (rule 7) and the fancy synonyms (rules 8, 31)
+    "additionally", "crucial", "delve", "delves", "enduring", "enhance", "enhances",
+    "fostering", "garner", "interplay", "intricate", "pivotal", "showcase",
+    "showcases", "tapestry", "testament", "underscore", "underscores",
+    "leverage", "leverages", "utilize", "utilizes", "facilitate", "facilitates",
+    "numerous", "boasts", "serves as", "stands as",
 )
+FILLERS = (
+    "in order to", "due to the fact that", "it is important to note",
+    "it's worth noting", "it is worth noting", "in the event that",
+    "not just", "not only",
+)
+INLINE_HEADER = re.compile(r"^\s*[-*]\s+\*\*[^*]+:\*\*\s", re.M)
+CURLY = re.compile("[\u2018\u2019\u201c\u201d]")
 PROVENANCE = ("verified", "captured", "assumed", "established")
 PERMISSIVE = ("MIT", "BSD", "ISC", "Apache", "Unlicense", "0BSD", "Zlib", "MPL", "CC0")
 LICENSE_TOKENS = PERMISSIVE + (
@@ -395,10 +412,22 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
     prov = [w for w in PROVENANCE if re.search(rf"\b{w}\b", prose_all, re.I)]
     if prov:
         r.add("WARN", "leave-out", "provenance", f"research words in user-facing text: {', '.join(prov)}")
-    adj = {w: len(re.findall(rf"\b{re.escape(w)}\b", prose_all, re.I)) for w in ADJECTIVES}
-    adj = {w: n for w, n in adj.items() if n}
-    if adj:
-        r.add("WARN", "leave-out", "adjectives", ", ".join(f"{w} x{n}" for w, n in adj.items()) + "; replace each with a fact")
+
+    # Voice: the unslop patterns a regex can find
+    vocab = {w: len(re.findall(rf"\b{re.escape(w)}\b", prose_all, re.I)) for w in VOCABULARY}
+    vocab = {w: n for w, n in vocab.items() if n}
+    if vocab:
+        r.add("WARN", "voice", "vocabulary", ", ".join(f"{w} x{n}" for w, n in vocab.items()) + "; replace each with a fact or the plain word")
+    fill = {w: len(re.findall(rf"\b{re.escape(w)}\b", prose_all, re.I)) for w in FILLERS}
+    fill = {w: n for w, n in fill.items() if n}
+    if fill:
+        r.add("WARN", "voice", "filler", ", ".join(f'"{w}" x{n}' for w, n in fill.items()) + "; cut, or state the point directly")
+    inline = INLINE_HEADER.findall(prose_all)
+    if len(inline) >= 3:
+        r.add("WARN", "voice", "inline-headers", f"{len(inline)} bullets open with a bold label and a colon; write them as prose or make the lead-in a sentence")
+    curly = len(CURLY.findall(text))
+    if curly:
+        r.add("WARN", "voice", "punctuation", f"{curly} curly quote(s); use straight quotes")
 
     # Style
     toc = sum(1 for l in top.lines + (h1.lines if h1 else []) if re.match(r"^\s*[-*]\s+\[.*\]\(#", l))
@@ -410,14 +439,15 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
         words = [w for w in plain(s.title).split() if len(w) >= 4 and not w.isupper()]
         if len(words) >= 2 and all(w[0].isupper() for w in words):
             r.add("WARN", "style", "headings", f'"{s.title}" is title case; use sentence case')
-        if EMOJI.search(s.title):
-            r.add("WARN", "style", "headings", f'"{s.title}" carries an emoji')
     for title, n in seen.items():
         if n > 1:
             r.add("WARN", "style", "headings", f'"{title}" appears {n} times; anchors collide')
-    dashes = text.count("—")
+    dashes = text.count("\u2014")
     if dashes:
-        r.add("WARN", "style", "punctuation", f"{dashes} em dash(es)")
+        r.add("WARN", "voice", "punctuation", f"{dashes} em dash(es); end the sentence or use a comma")
+    emoji = len(EMOJI.findall(prose_all + headings_text))
+    if emoji:
+        r.add("WARN", "voice", "emoji", f"{emoji} decorative emoji")
     return r
 
 

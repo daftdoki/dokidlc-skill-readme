@@ -1,0 +1,73 @@
+{
+  "skill_name": "readme",
+  "evals": [
+    {
+      "id": 1,
+      "name": "write-from-nothing",
+      "prompt": "This repository has no README. Write one. The repository is at REPO/ch-display-noreadme; work on that copy, read what you need, and write README.md there. Also copy the finished README.md to the output directory.",
+      "expected_output": "A README.md under 150 lines with a one-liner, what it does, why it exists, status, install, a first run with output, caveats, links into docs/, where to ask, and the MIT license; passes readme-check.",
+      "files": [
+        "REPO/ch-display-noreadme"
+      ],
+      "assertions": [
+        "readme-check exits 0 on the written README.md in the repository copy",
+        "README.md is 150 lines or fewer",
+        "A why paragraph states the problem or the alternative (not only what it does)",
+        "A status line says stable, experimental, maintained, or deprecated, or marks the status as unknown for the creator to fill",
+        "The usage example shows a command and what it prints",
+        "The README links at least one file under docs/",
+        "No section describes architecture, internals, or development process",
+        "The one-liner under the title is under 120 characters and names what it does for the reader"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "rewrite-thin-readme",
+      "prompt": "The README in REPO/neckbeard is 19 lines and tells a new user almost nothing. Rewrite it for someone deciding whether to use this agent. Work on that copy, write README.md there, and copy the finished README.md to the output directory.",
+      "expected_output": "A rewritten README.md that keeps the facts of the old one, adds why, status, install, first run, caveats, docs links, support, and license, and passes readme-check.",
+      "files": [
+        "REPO/neckbeard"
+      ],
+      "assertions": [
+        "readme-check exits 0 on the written README.md in the repository copy",
+        "Every fact from the old README survives: Ansible, approval before change, macOS/Linux/QNAP, questlog, memory, one repo per agent",
+        "A why paragraph and a status line are present",
+        "Install and usage sections each have a code block",
+        "README.md is 150 lines or fewer",
+        "No fact is invented: every claim about the agent traces to a file in the repository or is marked as a question for the creator"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "grade-long-readme",
+      "prompt": "Is the README at /Users/aaron/Code/agents/dokidlc-skill-memory any good for someone deciding whether to use it? Do not change anything in that repository. Write your findings to grade.md in the output directory.",
+      "expected_output": "A findings list ordered gates, required, leave-out, polish; each finding names a line and a one-sentence fix; ends with a one-line reader's verdict. Names the missing status, the missing license section, the missing support link, the 274-line length, install at line 213.",
+      "files": [],
+      "assertions": [
+        "Findings are ordered gates first, then required sections, then leave-out, then polish",
+        "Names the missing status line",
+        "Names the missing license section",
+        "Names the missing support or issue link",
+        "Names the length (274 lines) or install placed after 200 lines of explanation",
+        "Each finding names a line number or a heading and a one-sentence fix",
+        "Ends with a one-line reader's verdict",
+        "Nothing in /Users/aaron/Code/agents/dokidlc-skill-memory was modified"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "diff-needs-readme",
+      "prompt": "In /Users/aaron/Code/ch-display, does the change 1c4df3e~1..6fdb7a6 need a README edit? Do not change anything in that repository. Write your answer to diff.md in the output directory.",
+      "expected_output": "A list matching each user-visible change (input rename over the API, the override file format change) to the README section and line that moves, and declaring the rest internal (protocol errata, tests, bridge internals).",
+      "files": [],
+      "assertions": [
+        "Identifies input rename over the API as a user-visible change",
+        "Addresses the example override file change explicitly, as a README edit or as internal with a reason",
+        "Names the README section or line that moves for each user-visible change",
+        "Declares protocol errata, tests, and bridge internals as not needing a README edit",
+        "Gives a yes or no answer",
+        "Nothing in /Users/aaron/Code/ch-display was modified"
+      ]
+    }
+  ]
+}

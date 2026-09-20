@@ -108,12 +108,12 @@ def test_adjectives_in_code_and_alt_text_are_not_counted(tmp_path):
     (tmp_path / "simple.png").write_bytes(b"")
     text = GOOD.replace("Turns a CSV", "The `simple` theme ![simple](simple.png) turns a CSV")
     code, findings = run(repo(tmp_path, text))
-    assert not verdicts(findings, "adjectives")
+    assert not verdicts(findings, "vocabulary")
 
 
 def test_adjectives_in_prose_warn(tmp_path):
     code, findings = run(repo(tmp_path, GOOD.replace("Turns a CSV", "A blazing fast tool that turns a CSV")))
-    assert verdicts(findings, "adjectives") == {"WARN"}
+    assert verdicts(findings, "vocabulary") == {"WARN"}
 
 
 def test_non_permissive_license_far_down_warns(tmp_path):
@@ -141,7 +141,26 @@ def test_title_case_heading_warns(tmp_path):
     assert "WARN" in verdicts(findings, "headings")
 
 
-@pytest.mark.parametrize("dash", ["—"])
-def test_em_dash_warns(tmp_path, dash):
-    code, findings = run(repo(tmp_path, GOOD.replace("one PNG per day", f"one PNG {dash} per day")))
+@pytest.mark.parametrize("bad", ["one PNG \u2014 per day", "one \u201cPNG\u201d per day"])
+def test_em_dash_and_curly_quotes_warn(tmp_path, bad):
+    code, findings = run(repo(tmp_path, GOOD.replace("one PNG per day", bad)))
     assert verdicts(findings, "punctuation") == {"WARN"}
+
+
+def test_filler_and_vocabulary_warn(tmp_path):
+    text = GOOD.replace("Turns a CSV", "In order to leverage your readings, it turns a CSV")
+    code, findings = run(repo(tmp_path, text))
+    assert verdicts(findings, "filler") == {"WARN"}
+    assert verdicts(findings, "vocabulary") == {"WARN"}
+
+
+def test_inline_header_bullets_warn(tmp_path):
+    bullets = "\n".join(f"- **Item {i}:** item {i} does a thing." for i in range(3))
+    text = GOOD.replace("Caveat: it does not read Excel files.", "Caveat: it does not read Excel files.\n\n" + bullets)
+    code, findings = run(repo(tmp_path, text))
+    assert verdicts(findings, "inline-headers") == {"WARN"}
+
+
+def test_emoji_in_heading_warns(tmp_path):
+    code, findings = run(repo(tmp_path, GOOD.replace("## Usage", "## Usage \U0001F680")))
+    assert verdicts(findings, "emoji") == {"WARN"}

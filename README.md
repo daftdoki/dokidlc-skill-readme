@@ -2,7 +2,7 @@
 
 A Claude Code plugin that writes and grades a README.md for the person deciding whether to use the software.
 
-It carries one skill, `readme`, with three verbs. Write creates or rewrites a README from what the repository holds. Grade reports on an existing one, ordered by what fails the reader first. Diff reads a commit range and says which README line moves, or why none does. A checker, `readme-check`, runs the mechanical part: title, one-liner, install and usage blocks, license, links, length, and two gates.
+It carries one skill, `readme`, with three verbs. Write creates or rewrites a README from what the repository holds. Grade reports on an existing one, ordered by what fails the reader first. Diff reads a commit range and says which README line moves, or why none does. A checker, `readme-check`, runs the mechanical part: title, one-liner, install and usage blocks, license, links, length, two gates, and the patterns of the `unslop` skill that a regex can find.
 
 ## Why the two gates
 
@@ -19,6 +19,8 @@ claude plugin install readme@dokidlc
 ```
 
 Claude Code puts `readme-check` on PATH while the plugin is enabled. It needs Python 3.12 or later and nothing else.
+
+Install `unslop@dokidlc` beside it. The skill invokes `unslop` on every draft and in every grade's polish pass; without it, the checker's voice class is the only writing check that runs.
 
 ## Run it
 
