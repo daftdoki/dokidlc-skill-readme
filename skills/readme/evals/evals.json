@@ -34,9 +34,10 @@
         "Every fact from the old README survives: Ansible, approval before change, macOS/Linux/QNAP, questlog, memory",
         "A why paragraph and a status line are present",
         "Install and usage sections each have a code block",
-        "README.md is 150 lines or fewer",
+        "README.md is 80 lines or fewer",
         "No fact is invented: every claim about the agent traces to a file in the repository or is marked as a question for the creator",
-        "No host inventory, page or quest counts, portrait, or history section beyond one status line"
+        "No host inventory, page or quest counts, portrait, or history section beyond one status line",
+        "Names kinds of tools and where they live rather than each script, skill, and server by name"
       ]
     },
     {

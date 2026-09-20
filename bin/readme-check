@@ -28,7 +28,8 @@ from pathlib import Path
 SOFT_LINE_CEILING = 150
 SECTION_LINE_CEILING = 40
 ONE_LINER_MAX = 120
-INTRO_WORD_CEILING = 300
+INTRO_WORD_CEILING = 300  # one part; a project with several parts earns up to INTRO_WORD_MAX
+INTRO_WORD_MAX = 600
 BADGE_CEILING = 5
 
 # The mechanical subset of the unslop skill's patterns. The judgment half
@@ -271,8 +272,10 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
     intro_words = len(re.sub(r"```.*?```", "", "\n".join(lines[:stop]), flags=re.S).split())
     if no_code:
         pass
+    elif intro_words > INTRO_WORD_MAX:
+        r.add("WARN", "style", "intro", f"{intro_words} words before install or usage; even a project with several parts stops near {INTRO_WORD_MAX}")
     elif intro_words > INTRO_WORD_CEILING:
-        r.add("WARN", "style", "intro", f"{intro_words} words before install or usage; the reader is still deciding")
+        r.add("INFO", "style", "intro", f"{intro_words} words before install or usage; right for several parts, long for one")
     else:
         r.add("PASS", "style", "intro", f"{intro_words} words before install or usage")
 
