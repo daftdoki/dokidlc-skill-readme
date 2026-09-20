@@ -1,0 +1,12 @@
+[project]
+name = "dokidlc-skill-readme"
+version = "0.0.0"
+description = "Test harness for the readme plugin. The plugin itself is bin/readme-check and skills/."
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

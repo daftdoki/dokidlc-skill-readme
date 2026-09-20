@@ -1,0 +1,455 @@
+#!/usr/bin/env python3
+"""Mechanical checks on a README.md, for the reader who wants to use the software.
+
+    readme-check [PATH] [--json] [--network]
+
+PATH is a repository root or a README file; default is the current
+directory. Every check prints one line: a verdict, a class, an id, and
+what was found. Exit 1 when a gate or a required check fails.
+
+Classes: gate (the two answers most READMEs lack: why and status),
+required, conditional (checked only when the repository meets the
+condition), leave-out (material that belongs in another document), and
+style. The judgment checks, the ones a script cannot make, are in the
+skill's references/sections.md and are the model's job.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+import urllib.request
+from dataclasses import dataclass, field
+from pathlib import Path
+
+SOFT_LINE_CEILING = 150
+SECTION_LINE_CEILING = 40
+ONE_LINER_MAX = 120
+INTRO_WORD_CEILING = 300
+BADGE_CEILING = 5
+
+ADJECTIVES = (
+    "blazing", "powerful", "simple", "easy", "seamless", "robust", "lightweight",
+    "elegant", "cutting-edge", "state-of-the-art", "intuitive", "effortless",
+    "modern", "beautiful", "amazing", "awesome", "revolutionary", "next-generation",
+)
+PROVENANCE = ("verified", "captured", "assumed", "established")
+PERMISSIVE = ("MIT", "BSD", "ISC", "Apache", "Unlicense", "0BSD", "Zlib", "MPL", "CC0")
+LICENSE_TOKENS = PERMISSIVE + (
+    "GPL", "AGPL", "LGPL", "SSPL", "BUSL", "EUPL", "CC BY", "UNLICENSED",
+    "SEE LICENSE", "proprietary", "Proprietary",
+)
+
+H = {
+    "install": r"install|installation|set ?up|getting started|quick ?start",
+    "usage": r"usage|run|running|quick ?start|getting started|example|try it|how to use|use it",
+    "why": r"why|motivation|background|alternatives?|compar|rationale",
+    "status": r"status|roadmap|maintenance|stability",
+    "license": r"licen[cs]e",
+    "docs": r"docs|documentation|further reading|read more|more|see also|links",
+    "support": r"support|help|questions|contact|community",
+    "leave_out": r"\b(architecture|internals|changelog|release notes|development (process|workflow)|how it works)\b",
+}
+BODY = {
+    "why": r"\b(why|instead of|unlike|compared (to|with)|alternative|rather than|the problem|exists (because|to)|built (because|to))\b",
+    "status": r"\b(stable|experimental|deprecated|unmaintained|maintained|alpha|beta|pre-release|work in progress|production[- ]ready|early days|actively developed|no longer)\b",
+    "caveats": r"\b(caveat|limitation|known issue|not supported|does not|doesn't|only works|cannot|can't|won't|unsupported|not yet)\b",
+    "output": r"\b(prints|output|shows|you should see|returns|displays|looks like|responds)\b",
+    "runtime": r"\b(python|node|npm|npx|uv|pip|cargo|rustc|go|ruby|gem|java|docker|deno|bun)\b",
+    "version": r"(\d+(\.\d+)+\+?|>=\s*\d|\bv?\d+\.\d+)",
+}
+
+FENCE = re.compile(r"^\s*(```|~~~)")
+HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+LINK = re.compile(r"!?\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)")
+BADGE_LINE = re.compile(r"^\s*(\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)\s*|!\[[^\]]*\]\([^)]*\)\s*|<img [^>]*>\s*|<a [^>]*><img [^>]*></a>\s*)+$")
+EMOJI = re.compile("[\U0001F300-\U0001FAFF☀-➿⭐✅❌]")
+CODE_SPAN = re.compile(r"`[^`]*`")
+
+
+@dataclass
+class Section:
+    level: int
+    title: str
+    start: int
+    lines: list[str] = field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        return "\n".join(self.lines)
+
+    @property
+    def prose(self) -> str:
+        out, fenced = [], False
+        for line in self.lines:
+            if FENCE.match(line):
+                fenced = not fenced
+                continue
+            if not fenced:
+                out.append(line)
+        return "\n".join(out)
+
+    @property
+    def fences(self) -> int:
+        return sum(1 for line in self.lines if FENCE.match(line)) // 2
+
+
+@dataclass
+class Finding:
+    verdict: str
+    cls: str
+    check: str
+    detail: str
+
+    def line(self) -> str:
+        return f"{self.verdict:4} {self.cls:11} {self.check}: {self.detail}"
+
+
+class Report:
+    def __init__(self) -> None:
+        self.findings: list[Finding] = []
+
+    def add(self, verdict: str, cls: str, check: str, detail: str) -> None:
+        self.findings.append(Finding(verdict, cls, check, detail))
+
+    @property
+    def failed(self) -> bool:
+        return any(f.verdict == "FAIL" for f in self.findings)
+
+
+def parse(text: str) -> list[Section]:
+    """Split on ATX headings, ignoring headings inside code fences."""
+    sections = [Section(0, "", 0)]
+    fenced = False
+    for i, line in enumerate(text.splitlines()):
+        if FENCE.match(line):
+            fenced = not fenced
+        m = None if fenced else HEADING.match(line)
+        if m:
+            sections.append(Section(len(m.group(1)), m.group(2).strip(), i))
+        else:
+            sections[-1].lines.append(line)
+    return sections
+
+
+def plain(title: str) -> str:
+    """A heading with link and code markup removed, for matching."""
+    return LINK.sub(lambda m: m.group(1), CODE_SPAN.sub(lambda m: m.group(0).strip("`"), title))
+
+
+def find_section(sections: list[Section], pattern: str) -> Section | None:
+    rx = re.compile(pattern, re.I)
+    for s in sections:
+        if s.level and rx.search(plain(s.title)):
+            return s
+    return None
+
+
+def project_names(root: Path) -> set[str]:
+    names = {root.resolve().name}
+    py = root / "pyproject.toml"
+    if py.exists():
+        m = re.search(r'^\s*name\s*=\s*"([^"]+)"', py.read_text(errors="replace"), re.M)
+        if m:
+            names.add(m.group(1))
+    pk = root / "package.json"
+    if pk.exists():
+        try:
+            names.add(json.loads(pk.read_text())["name"].split("/")[-1])
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return names
+
+
+def gh_description(root: Path) -> str | None:
+    try:
+        out = subprocess.run(
+            ["gh", "repo", "view", "--json", "description", "-q", ".description"],
+            cwd=root, capture_output=True, text=True, timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+def has_remote(root: Path) -> bool:
+    out = subprocess.run(["git", "-C", str(root), "remote"], capture_output=True, text=True)
+    return out.returncode == 0 and bool(out.stdout.strip())
+
+
+def norm(word: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", word.lower())
+
+
+def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Report:
+    r = Report()
+    text = readme.read_text(errors="replace")
+    lines = text.splitlines()
+    sections = parse(text)
+    headed = [s for s in sections if s.level]
+    top = sections[0]
+
+    # Title
+    first_content = next((l for l in lines if l.strip() and not l.strip().startswith("<!--")), "")
+    h1 = next((s for s in headed if s.level == 1), None)
+    if not h1 or not HEADING.match(first_content) or len(HEADING.match(first_content).group(1)) != 1:
+        r.add("FAIL", "required", "title", "the first line is not a level-one heading")
+    else:
+        names = {norm(n) for n in project_names(root)}
+        title = norm(plain(h1.title))
+        if title in names or any(n in title for n in names):
+            r.add("PASS", "required", "title", f'"{h1.title}" matches the project name')
+        else:
+            r.add("WARN", "required", "title", f'"{h1.title}" does not match {sorted(project_names(root))}; say why in the description')
+
+    # One-liner: first paragraph under the title that is not badges or an image
+    body = h1.lines if h1 else top.lines
+    para: list[str] = []
+    badges = 0
+    for line in body:
+        if not line.strip():
+            if para:
+                break
+            continue
+        if BADGE_LINE.match(line) or line.strip().startswith("<"):
+            badges += len(IMAGE.findall(line)) or 1
+            continue
+        if FENCE.match(line) or HEADING.match(line) or line.lstrip().startswith(("|", "-", "*", ">")):
+            break
+        para.append(line.strip())
+    one_liner = " ".join(para)
+    if not one_liner:
+        r.add("FAIL", "required", "one-liner", "no plain sentence under the title says what this does")
+    else:
+        if len(one_liner) > ONE_LINER_MAX:
+            r.add("WARN", "required", "one-liner", f"{len(one_liner)} characters; keep the first sentence under {ONE_LINER_MAX}")
+        else:
+            r.add("PASS", "required", "one-liner", f'"{one_liner}"')
+        desc = gh_description(root)
+        if desc is not None:
+            if desc and norm(desc) != norm(one_liner) and norm(desc) not in norm(one_liner):
+                r.add("WARN", "required", "one-liner", f'GitHub description differs: "{desc}"')
+            elif not desc:
+                r.add("WARN", "required", "one-liner", "the GitHub description is empty; set it to the one-liner")
+    if badges > BADGE_CEILING:
+        r.add("WARN", "style", "badges", f"{badges} badges; each one should answer a question a user has")
+    elif badges:
+        r.add("INFO", "style", "badges", f"{badges} badge(s)")
+
+    # Intro length: everything before the first install or usage heading
+    stop = next((s.start for s in headed if re.search(H["install"] + "|" + H["usage"], plain(s.title), re.I)), len(lines))
+    intro_words = len(re.sub(r"```.*?```", "", "\n".join(lines[:stop]), flags=re.S).split())
+    if no_code:
+        pass
+    elif intro_words > INTRO_WORD_CEILING:
+        r.add("WARN", "style", "intro", f"{intro_words} words before install or usage; the reader is still deciding")
+    else:
+        r.add("PASS", "style", "intro", f"{intro_words} words before install or usage")
+
+    # Prose scans see link text but not link targets or code spans.
+    prose_all = LINK.sub(lambda m: "" if m.group(0).startswith("!") else m.group(1), CODE_SPAN.sub("", "\n".join(s.prose for s in sections)))
+    headings_text = " ".join(s.title for s in headed)
+
+    # Gates
+    for gate in ("why", "status"):
+        sec = find_section(sections, H[gate])
+        m = re.search(BODY[gate], prose_all, re.I)
+        if sec:
+            r.add("PASS", "gate", gate, f'section "{sec.title}"')
+        elif m:
+            line_no = next(i + 1 for i, l in enumerate(lines) if m.group(0) in l) if any(m.group(0) in l for l in lines) else 0
+            r.add("PASS", "gate", gate, f'line {line_no}: "{m.group(0)}"')
+        else:
+            what = "why this exists rather than the alternatives" if gate == "why" else "whether this is stable, experimental, or maintained"
+            r.add("FAIL", "gate", gate, f"nothing says {what}")
+
+    # Install
+    inst = find_section(sections, H["install"])
+    if no_code:
+        r.add("INFO", "required", "install", "waived: documentation repository")
+    elif not inst:
+        r.add("FAIL", "required", "install", "no install, setup, or getting-started heading")
+    elif not inst.fences:
+        r.add("FAIL", "required", "install", f'"{inst.title}" has no code block')
+    else:
+        r.add("PASS", "required", "install", f'"{inst.title}" has a code block')
+        if re.search(BODY["runtime"], inst.prose, re.I) and not re.search(BODY["version"], inst.prose):
+            r.add("WARN", "conditional", "prerequisites", "install names a runtime but no version")
+
+    # Usage
+    use = next((s for s in headed if re.search(H["usage"], plain(s.title), re.I) and s is not inst), None)
+    if no_code:
+        r.add("INFO", "required", "usage", "waived: documentation repository")
+    elif not use:
+        r.add("FAIL", "required", "usage", "no usage, run, or example heading apart from install")
+    elif not use.fences:
+        r.add("FAIL", "required", "usage", f'"{use.title}" has no code block')
+    else:
+        if use.fences >= 2 or re.search(BODY["output"], use.prose, re.I):
+            r.add("PASS", "required", "usage", f'"{use.title}" shows a command and its output')
+        else:
+            r.add("WARN", "required", "usage", f'"{use.title}" shows a command but not what it prints')
+
+    # Caveats
+    m = re.search(BODY["caveats"], prose_all, re.I)
+    if m:
+        r.add("PASS", "required", "caveats", f'"{m.group(0)}" appears; check the sharp edges are all named')
+    else:
+        r.add("WARN", "required", "caveats", "no caveat phrasing found; confirm the sharp edges a first-time user hits are named")
+
+    # License
+    lic = find_section(sections, H["license"])
+    lic_files = [p for p in root.iterdir() if p.name.upper().startswith(("LICENSE", "LICENCE", "COPYING"))]
+    ident = next((t for t in LICENSE_TOKENS if re.search(rf"\b{re.escape(t)}\b", text)), None)
+    if not lic:
+        r.add("FAIL", "required", "license", "no license section")
+    else:
+        if not ident:
+            r.add("WARN", "required", "license", f'"{lic.title}" names no SPDX identifier')
+        if not lic_files:
+            r.add("FAIL", "required", "license", "no LICENSE file in the repository")
+        elif not re.search(r"\]\((\./)?(LICENSE|LICENCE|COPYING)", text, re.I):
+            r.add("WARN", "required", "license", f"{lic_files[0].name} exists but the README does not link it")
+        else:
+            r.add("PASS", "required", "license", f"{ident or 'license'} named and {lic_files[0].name} linked")
+        if lic is not headed[-1]:
+            r.add("INFO", "style", "license", f'"{lic.title}" is not the last section')
+        if ident and ident not in PERMISSIVE and lic.start > 30:
+            r.add("WARN", "style", "license", f"{ident} is not permissive; say so near the top, it disqualifies fastest")
+
+    # Other docs
+    docs_dir = root / "docs"
+    doc_files = sorted(p for p in docs_dir.rglob("*.md")) if docs_dir.is_dir() else []
+    if doc_files:
+        if re.search(r"\]\((\./)?docs/", text):
+            r.add("PASS", "conditional", "other-docs", f"links into docs/ ({len(doc_files)} files there)")
+        else:
+            r.add("FAIL", "conditional", "other-docs", f"docs/ has {len(doc_files)} markdown files and the README links none")
+    for name in ("CONTRIBUTING", "CHANGELOG", "SECURITY", "CODE_OF_CONDUCT"):
+        if any(p.name.upper().startswith(name) for p in root.iterdir()) and not re.search(name, text, re.I):
+            r.add("WARN", "conditional", "other-docs", f"{name} file exists and is not mentioned")
+
+    # Support
+    if re.search(r"/issues|/discussions|mailto:|discord|slack|gitter|matrix\.to|mailing list", text, re.I) or find_section(sections, H["support"]):
+        r.add("PASS", "required", "support", "says where to ask")
+    elif has_remote(root):
+        r.add("FAIL", "required", "support", "nothing says where to file a bug or ask a question")
+    else:
+        r.add("WARN", "required", "support", "nothing says where to ask; no remote, so maybe there is nowhere yet")
+
+    # Links and images
+    anchors = {re.sub(r"[^\w\- ]", "", CODE_SPAN.sub(lambda m: m.group(0).strip("`"), s.title)).strip().lower().replace(" ", "-") for s in headed}
+    broken, http = [], []
+    for alt, target in LINK.findall(text):
+        if target.startswith(("http://", "https://")):
+            http.append(target)
+        elif target.startswith("#"):
+            if target[1:].lower() not in anchors:
+                broken.append(target)
+        elif not target.startswith("mailto:"):
+            path = target.split("#")[0]
+            if path and not (readme.parent / path).exists():
+                broken.append(target)
+    if broken:
+        r.add("FAIL", "required", "links", f"{len(broken)} unresolved: {', '.join(broken[:5])}")
+    else:
+        n = len(LINK.findall(text))
+        r.add("PASS" if n else "WARN", "required", "links", f"{n} links resolve" if n else "no links at all; point at the docs and the issue tracker")
+    if network and http:
+        dead = []
+        for url in dict.fromkeys(http):
+            try:
+                req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "readme-check"})
+                urllib.request.urlopen(req, timeout=8)
+            except Exception:
+                dead.append(url)
+        if dead:
+            r.add("WARN", "required", "links", f"{len(dead)} http links did not answer: {', '.join(dead[:5])}")
+        else:
+            r.add("PASS", "required", "links", f"{len(set(http))} http links answer")
+    for alt, target in IMAGE.findall(text):
+        if not alt.strip():
+            r.add("WARN", "conditional", "images", f"{target} has no alt text")
+    if not IMAGE.findall(text) and (list(root.glob("**/templates")) or list(root.glob("**/*.html"))):
+        r.add("INFO", "conditional", "visuals", "the repository has HTML and the README has no screenshot")
+
+    # Length
+    if len(lines) > SOFT_LINE_CEILING:
+        r.add("WARN", "style", "length", f"{len(lines)} lines; soft ceiling {SOFT_LINE_CEILING}, move detail to docs/")
+    else:
+        r.add("PASS", "style", "length", f"{len(lines)} lines")
+    for s in headed:
+        if s.level == 2 and len(s.lines) > SECTION_LINE_CEILING:
+            r.add("WARN", "style", "length", f'"{s.title}" runs {len(s.lines)} lines; a section past a few paragraphs belongs in docs/')
+
+    # Leave-out
+    for s in headed:
+        if re.search(H["leave_out"], plain(s.title), re.I):
+            r.add("WARN", "leave-out", "internals", f'"{s.title}" is for the person working on it, not the person using it')
+        if re.search(r"contribut", plain(s.title), re.I) and len([l for l in s.lines if l.strip()]) > 8:
+            r.add("WARN", "leave-out", "contributing", f'"{s.title}" runs {len(s.lines)} lines; one line and a link to CONTRIBUTING.md')
+    prov = [w for w in PROVENANCE if re.search(rf"\b{w}\b", prose_all, re.I)]
+    if prov:
+        r.add("WARN", "leave-out", "provenance", f"research words in user-facing text: {', '.join(prov)}")
+    adj = {w: len(re.findall(rf"\b{re.escape(w)}\b", prose_all, re.I)) for w in ADJECTIVES}
+    adj = {w: n for w, n in adj.items() if n}
+    if adj:
+        r.add("WARN", "leave-out", "adjectives", ", ".join(f"{w} x{n}" for w, n in adj.items()) + "; replace each with a fact")
+
+    # Style
+    toc = sum(1 for l in top.lines + (h1.lines if h1 else []) if re.match(r"^\s*[-*]\s+\[.*\]\(#", l))
+    if toc >= 3:
+        r.add("INFO", "style", "toc", f"{toc}-entry table of contents; GitHub generates one from the headings")
+    seen: dict[str, int] = {}
+    for s in headed:
+        seen[s.title.lower()] = seen.get(s.title.lower(), 0) + 1
+        words = [w for w in plain(s.title).split() if len(w) >= 4 and not w.isupper()]
+        if len(words) >= 2 and all(w[0].isupper() for w in words):
+            r.add("WARN", "style", "headings", f'"{s.title}" is title case; use sentence case')
+        if EMOJI.search(s.title):
+            r.add("WARN", "style", "headings", f'"{s.title}" carries an emoji')
+    for title, n in seen.items():
+        if n > 1:
+            r.add("WARN", "style", "headings", f'"{title}" appears {n} times; anchors collide')
+    dashes = text.count("—")
+    if dashes:
+        r.add("WARN", "style", "punctuation", f"{dashes} em dash(es)")
+    return r
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("path", nargs="?", default=".", help="repository root or README file")
+    ap.add_argument("--json", action="store_true", help="machine-readable findings")
+    ap.add_argument("--network", action="store_true", help="also HEAD every http link")
+    ap.add_argument("--no-code", action="store_true", help="documentation repository: waive install and usage")
+    args = ap.parse_args()
+
+    p = Path(args.path)
+    if p.is_dir():
+        root, readme = p, p / "README.md"
+    else:
+        root, readme = p.parent, p
+    if not readme.exists():
+        msg = Finding("FAIL", "required", "readme", f"{readme} does not exist")
+        print(json.dumps([msg.__dict__]) if args.json else msg.line())
+        return 1
+
+    report = check(readme, root, args.network, args.no_code)
+    if args.json:
+        print(json.dumps([f.__dict__ for f in report.findings], indent=2))
+    else:
+        for f in report.findings:
+            print(f.line())
+        fails = sum(1 for f in report.findings if f.verdict == "FAIL")
+        warns = sum(1 for f in report.findings if f.verdict == "WARN")
+        print(f"\n{readme}: {fails} failed, {warns} warnings")
+    return 1 if report.failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

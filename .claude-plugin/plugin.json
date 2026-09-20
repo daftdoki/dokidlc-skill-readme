@@ -1,0 +1,7 @@
+{
+  "name": "readme",
+  "description": "Write, grade, and keep a README.md for the person deciding whether to use the software. One skill, three verbs, and a checker on PATH.",
+  "author": { "name": "DaftDoki" },
+  "license": "MIT",
+  "homepage": "https://github.com/daftdoki/dokidlc-skill-readme"
+}
