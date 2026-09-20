@@ -71,7 +71,7 @@ H = {
     "leave_out": r"\b(architecture|internals|changelog|release notes|development (process|workflow)|how it works)\b",
 }
 BODY = {
-    "why": r"\b(why|instead of|unlike|compared (to|with)|alternative|rather than|the problem|exists (because|to)|built (because|to))\b",
+    "why": r"\b(why (this|not|another|it exists)|instead of|unlike|compared (to|with)|alternatives?|rather than|the problem|exists (because|to|for)|built (because|to|for)|started (as|because))\b",
     "status": r"\b(stable|experimental|deprecated|unmaintained|maintained|alpha|beta|pre-release|work in progress|production[- ]ready|early days|actively developed|no longer)\b",
     "caveats": r"\b(caveat|limitation|known issue|not supported|does not|doesn't|only works|cannot|can't|won't|unsupported|not yet)\b",
     "output": r"\b(prints|output|shows|you should see|returns|displays|looks like|responds)\b",
@@ -202,8 +202,17 @@ def norm(word: str) -> str:
     return re.sub(r"[^a-z0-9]", "", word.lower())
 
 
+def is_agent_home(root: Path) -> bool:
+    """A CLAUDE.md and no package manifest: a repository a person opens in Claude Code, not software."""
+    manifests = ("pyproject.toml", "package.json", "Cargo.toml", "go.mod", "setup.py", "Makefile", "CMakeLists.txt", "Gemfile")
+    return (root / "CLAUDE.md").exists() and not any((root / m).exists() for m in manifests)
+
+
 def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Report:
     r = Report()
+    agent_home = is_agent_home(root)
+    if agent_home:
+        r.add("INFO", "conditional", "agent-home", "CLAUDE.md and no package manifest; a missing LICENSE is a warning, not a failure")
     text = readme.read_text(errors="replace")
     lines = text.splitlines()
     sections = parse(text)
@@ -327,7 +336,9 @@ def check(readme: Path, root: Path, network: bool, no_code: bool = False) -> Rep
     else:
         if not ident:
             r.add("WARN", "required", "license", f'"{lic.title}" names no SPDX identifier')
-        if not lic_files:
+        if not lic_files and agent_home:
+            r.add("WARN", "required", "license", "no LICENSE file; the README says the repository has none")
+        elif not lic_files:
             r.add("FAIL", "required", "license", "no LICENSE file in the repository")
         elif not re.search(r"\]\((\./)?(LICENSE|LICENCE|COPYING)", text, re.I):
             r.add("WARN", "required", "license", f"{lic_files[0].name} exists but the README does not link it")

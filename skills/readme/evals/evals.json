@@ -17,7 +17,8 @@
         "The usage example shows a command and what it prints",
         "The README links at least one file under docs/",
         "No section describes architecture, internals, or development process",
-        "The one-liner under the title is under 120 characters and names what it does for the reader"
+        "The one-liner under the title is under 120 characters and names what it does for the reader",
+        "The description names the bridge and the display as separate parts and says the bridge can run alone for other software"
       ]
     },
     {
@@ -30,11 +31,12 @@
       ],
       "assertions": [
         "readme-check exits 0 on the written README.md in the repository copy",
-        "Every fact from the old README survives: Ansible, approval before change, macOS/Linux/QNAP, questlog, memory, one repo per agent",
+        "Every fact from the old README survives: Ansible, approval before change, macOS/Linux/QNAP, questlog, memory",
         "A why paragraph and a status line are present",
         "Install and usage sections each have a code block",
         "README.md is 150 lines or fewer",
-        "No fact is invented: every claim about the agent traces to a file in the repository or is marked as a question for the creator"
+        "No fact is invented: every claim about the agent traces to a file in the repository or is marked as a question for the creator",
+        "No host inventory, page or quest counts, portrait, or history section beyond one status line"
       ]
     },
     {

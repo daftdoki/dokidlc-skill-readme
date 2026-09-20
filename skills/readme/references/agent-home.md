@@ -7,7 +7,7 @@ The reader is a person deciding whether to open this repository and let the agen
 What changes:
 
 - The one-liner names the agent, its domain, and its one defining rule. "A Claude Code agent that administers a homelab and asks before it changes anything."
-- Capabilities are the rules the agent works by and the tools it carries: the plugins, the skills, the MCP servers, the approval gate, the default it reaches for. These hold across sessions, so they belong in the README.
+- Capabilities are the rules the agent works by and the tools it carries: the plugins, the skills, the MCP servers, the approval gate, the default it reaches for. These hold across sessions, so they belong in the README. Write them as a person would explain the agent to a colleague, a sentence or two each with the example that makes the rule concrete, not as a checklist.
 - Why compares with a bare session and a `CLAUDE.md` of the reader's own, and says what the agent is not for.
 - Status says who it serves (one person's systems, not a product), when it was last reset, and whether it is in daily use.
 - Prerequisites are Claude Code, the plugins, and any local service they need.

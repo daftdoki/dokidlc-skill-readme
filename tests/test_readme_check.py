@@ -164,3 +164,17 @@ def test_inline_header_bullets_warn(tmp_path):
 def test_emoji_in_heading_warns(tmp_path):
     code, findings = run(repo(tmp_path, GOOD.replace("## Usage", "## Usage \U0001F680")))
     assert verdicts(findings, "emoji") == {"WARN"}
+
+
+def test_bare_why_is_not_a_why(tmp_path):
+    text = GOOD.replace("Why this and not a spreadsheet: it runs unattended and never asks about date formats.", "The docs say why.")
+    code, findings = run(repo(tmp_path, text))
+    assert verdicts(findings, "why") == {"FAIL"}
+
+
+def test_agent_home_missing_license_warns(tmp_path):
+    (tmp_path / "CLAUDE.md").write_text("# rules\n")
+    text = GOOD.replace("MIT. See [LICENSE](LICENSE).", "None declared.")
+    code, findings = run(repo(tmp_path, text, license=False))
+    assert verdicts(findings, "agent-home") == {"INFO"}
+    assert "FAIL" not in verdicts(findings, "license")
