@@ -17,8 +17,8 @@ Three verbs. Pick the one the request names.
 
 Creates a README or rewrites one. The old README is a source of facts, never of structure.
 
-1. Read `references/sections.md`.
-2. Learn the project from the environment: the package manifest, `--help` output, entry points, `docs/`, tests, `LICENSE`, the git remote. Collect, in this order, the name, the one-liner, the capabilities a reader can verify, the nearest alternative, the runtime and its version, the install command, the first-run command and what it prints, the caveats, the config a first run needs, the documents worth linking, where to ask, the license, and the status.
+1. Read `references/sections.md`. If the repository holds no software, only a `CLAUDE.md`, skills, and settings that a person opens in Claude Code, read `references/agent-home.md` as well.
+2. Learn the project from the environment: the package manifest, `--help` output, entry points, `docs/`, tests, `LICENSE`, the git remote. Inventory every entry point before you write a word: each console script, subcommand, service, and API. A repository's name often names one part, and the README covers the set. Collect, in this order, the name, the one-liner, the capabilities a reader can verify, the nearest alternative, the runtime and its version, the install command, the first-run command and what it prints, the caveats, the config a first run needs, the documents worth linking, where to ask, the license, and the status.
 3. Run the install and first-run commands when the environment allows. Paste real output. Where a fact is out of reach (status, alternatives, output you could not produce), ask the creator once, listing every missing fact in one question. An invented status or a guessed output is worse than a gap.
 4. Write the file in the section order of the reference. Each capability line states something the reader can check by running the software; a line that fits another project unchanged says nothing about this one.
 5. Invoke the `unslop` skill on the draft. The checker catches its mechanical patterns; the skill catches puffery, rhythm, and mannered prose, which no regex does. Where the skill is not installed, say so in the report and go on.
@@ -31,7 +31,7 @@ Done when `readme-check` exits 0 and every one of the seven questions has its li
 
 Reports on an existing README. Writes nothing to the repository.
 
-1. Read `references/sections.md`.
+1. Read `references/sections.md`, and `references/agent-home.md` if the repository is an agent's home rather than software.
 2. Run `readme-check`.
 3. Give every row of the section table a verdict: pass, fail, or waived because the condition is not met. Apply the judgment column, not only the script's line. The script finds a heading called "Why"; you decide whether the paragraph under it tells the reader what this is not for.
 4. Walk the "what stays out" list and name each defect with its line.

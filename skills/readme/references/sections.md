@@ -1,6 +1,6 @@
 # Sections of a README, for the reader who wants to use the software
 
-The reader is a person deciding whether to use this, then getting it to run once. Contributors and maintainers get one line and a link. `readme-check` runs the mechanical checks; this file holds the rules a script cannot apply. The research behind it is `docs/research/readme-for-users.md` in the agent-builder repository.
+The reader is a person deciding whether to use this, then getting it to run once. Contributors and maintainers get one line and a link. A repository that is an agent's home rather than software has its own adjustments in `agent-home.md`. `readme-check` runs the mechanical checks; this file holds the rules a script cannot apply. The research behind it is `docs/research/readme-for-users.md` in the agent-builder repository.
 
 ## The reader's questions, in order
 
@@ -22,7 +22,7 @@ R is required, C is conditional on the stated condition, O is optional for this 
 |---|---|---|---|---|
 | Title | What is this called? | R | First heading is the project name. If it differs from the repository or package name, the description says why. | The name is self-evident, or the one-liner rescues it. |
 | One-liner | What does it do? | R | One sentence under 120 characters, directly under the title, no heading. Same text as the GitHub description and the package description field. | Names the outcome for the reader, not the stack. Defines any term the name assumes. Could not be pasted into another project's README unchanged. |
-| Description | Does it solve my problem? | R | A few paragraphs or a short list of capabilities. Second person, active voice. | Each line states a capability the reader can verify by running it. The stack and the architecture come after the purpose, if at all. |
+| Description | Does it solve my problem? | R | A few paragraphs or a short list of capabilities, covering every entry point the repository has. Second person, active voice. | Each line states a capability the reader can verify by running it. A capability that lets the reader make something of their own (a theme, a script against the API) outranks one that shows them something. The stack and the architecture come after the purpose, if at all. |
 | Why | Why this over the alternatives? | R | One paragraph: the problem it exists for and where it differs from the nearest alternative. An origin story serves a new project. If no alternative exists, one sentence says so. | The reader can tell what it is not for. Present in 25.7% of READMEs sampled by Prana et al., so its absence is the common defect. |
 | Visuals | What does it look like? | C: a UI, a display, or visual output | Screenshot or short GIF near the top, stored in the repository, with alt text. | The text beside the image says what the image shows. Deleting every image loses no fact. |
 | License | May I use it? | R | SPDX identifier, owner, link to `LICENSE`. Permissive at the end. A non-permissive license or a use restriction gets a one-line note under the description as well. | Placement matches how surprising the license is. |
